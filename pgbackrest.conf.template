@@ -1,0 +1,17 @@
+[global]
+start-fast=y
+archive-async=y
+
+repo1-path=${PGBACKREST_REPO1_PATH:-/var/lib/pgbackrest}
+repo1-retention-full=${PGBACKREST_REPO1_RETENTION_FULL:-7}
+repo1-retention-diff=${PGBACKREST_REPO1_RETENTION_DIFF:-30}
+
+process-max=${PGBACKREST_PROCESS_MAX:-4}
+log-level-console=${PGBACKREST_LOG_LEVEL_CONSOLE:-info}
+log-level-file=${PGBACKREST_LOG_LEVEL_FILE:-debug}
+log-path=${PGBACKREST_LOG_PATH:-/var/log/pgbackrest}
+compress-type=${PGBACKREST_COMPRESS_TYPE:-zst}
+compress-level=${PGBACKREST_COMPRESS_LEVEL:-6}
+
+[main]
+pg1-path=${PGBACKREST_PG1_PATH:-/var/lib/postgresql/data}
