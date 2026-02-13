@@ -7,10 +7,9 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/postgresql/conf.d \
- && chown -R postgres:postgres /etc/postgresql
-
-RUN mkdir -p -m 770 /var/log/pgbackrest /var/lib/pgbackrest /etc/pgbackrest /etc/pgbackrest/conf.d \
- && chown -R postgres:postgres /var/log/pgbackrest /var/lib/pgbackrest /etc/pgbackrest
+ && chmod 750 /etc/postgresql \
+ && mkdir -p -m 770 /var/log/pgbackrest /var/lib/pgbackrest /etc/pgbackrest /etc/pgbackrest/conf.d \
+ && chown -R postgres:postgres /etc/postgresql /var/log/pgbackrest /var/lib/pgbackrest /etc/pgbackrest
 
 USER postgres
 
