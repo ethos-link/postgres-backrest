@@ -2,10 +2,10 @@ name: Publish Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
     tags: [ 'v*' ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master" ]
   workflow_dispatch:
     inputs:
       postgres_version:
