@@ -9,10 +9,10 @@ POSTGRES_HBA_FILE="${POSTGRES_HBA_FILE:-$POSTGRES_HBA_FILE_DEFAULT}"
 
 # Render pgbackrest.conf from the template using env vars if template exists.
 if [ -f /usr/local/share/pgbackrest/pgbackrest.conf.template ]; then
-  envsubst < /usr/local/share/pgbackrest/pgbackrest.conf.template > /etc/pgbackrest/pgbackrest.conf
+  envsubst </usr/local/share/pgbackrest/pgbackrest.conf.template >/etc/pgbackrest/pgbackrest.conf
 else
   # Generate a minimal default pgbackrest.conf
-  cat > /etc/pgbackrest/pgbackrest.conf <<EOF
+  cat >/etc/pgbackrest/pgbackrest.conf <<EOF
 [global]
 repo1-path=/var/lib/pgbackrest
 repo1-retention-full=7
@@ -32,9 +32,9 @@ has_postgres_setting() {
 
   for arg in "$@"; do
     case "$arg" in
-      *"${key}="*)
-        return 0
-        ;;
+    *"${key}="*)
+      return 0
+      ;;
     esac
   done
 
@@ -54,3 +54,4 @@ if [ "${#args[@]}" -gt 0 ] && [ "${args[0]}" = "postgres" ]; then
 fi
 
 exec /usr/local/bin/docker-entrypoint.sh "${args[@]}"
+

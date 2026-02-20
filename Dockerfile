@@ -1,10 +1,17 @@
 ARG POSTGRES_VERSION=18.1
 FROM postgres:${POSTGRES_VERSION}
 
+# ensure setpriv works as expected
+RUN set -eux; \
+         \
+        echo 'testing setpriv:' ; \
+        setpriv --reuid=nobody --regid=nogroup --clear-groups id
+
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends pgbackrest gettext-base ca-certificates; \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*; \
+    rm /usr/local/bin/gosu 
 
 RUN mkdir -p /etc/postgresql/conf.d \
  && chmod 750 /etc/postgresql \
