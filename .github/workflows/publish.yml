@@ -2,10 +2,10 @@ name: Publish Docker Image
 
 on:
   push:
-    branches: [ "master" ]
-    tags: [ 'v*' ]
+    branches: ['master']
+    tags: ['v*']
   pull_request:
-    branches: [ "master" ]
+    branches: ['master']
   workflow_dispatch:
     inputs:
       postgres_version:
@@ -56,7 +56,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.REGISTRY_DOCKER }}/${{ env.IMAGE_NAME }}
+            ${{ env.REGISTRY_DOCKER }}/ethoslink/postgres-backrest
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
           tags: |
             type=schedule
@@ -89,7 +89,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           build-args: |
-             POSTGRES_VERSION=${{ inputs.postgres_version || '18.1' }}
+            POSTGRES_VERSION=${{ inputs.postgres_version || '18.1' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -105,3 +105,4 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+
