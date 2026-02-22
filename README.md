@@ -120,7 +120,6 @@ Common env vars referenced by the default template:
 - `PGBACKREST_COMPRESS_LEVEL`
 - `PGBACKREST_PG1_PATH`
 
-
 ---
 
 ## Building
@@ -142,8 +141,9 @@ The image is based on the official Debian-based PostgreSQL image and installs `p
 
 The image is published to:
 
-- **Docker Hub**: `ethoslink/postgres-backrest`
-- **GitHub Container Registry**: `ghcr.io/ethos-link/postgres-backrest`
+- **GitHub**: <https://github.com/ethos-link/postgres-backrest>
+- **Docker Hub**: <https://hub.docker.com/r/ethoslink/postgres-backrest>
+- **GitHub Container Registry**: <https://ghcr.io/ethos-link/postgres-backrest>
 
 To update to a new PostgreSQL version, pass a different `POSTGRES_VERSION` build-arg (or change the Dockerfile default) and rebuild.
 
