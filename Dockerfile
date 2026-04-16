@@ -9,6 +9,7 @@ RUN set -eux; \
 
 RUN set -eux; \
     apt-get update; \
+    apt-get -y upgrade; \
     apt-get install -y --no-install-recommends pgbackrest gettext-base ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
     rm /usr/local/bin/gosu 
