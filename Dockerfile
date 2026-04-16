@@ -1,4 +1,4 @@
-ARG POSTGRES_VERSION=18.1
+ARG POSTGRES_VERSION=18.2
 FROM postgres:${POSTGRES_VERSION}
 
 # ensure setpriv works as expected
@@ -9,6 +9,7 @@ RUN set -eux; \
 
 RUN set -eux; \
     apt-get update; \
+    apt-get -y upgrade; \
     apt-get install -y --no-install-recommends pgbackrest gettext-base ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
     rm /usr/local/bin/gosu 

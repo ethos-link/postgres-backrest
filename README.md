@@ -124,10 +124,15 @@ Common env vars referenced by the default template:
 
 ## Building
 
-To build the image with a specific PostgreSQL version:
+To build the image locally with a specific PostgreSQL version:
 
 ```bash
-docker build --build-arg POSTGRES_VERSION=18.1 -t ethoslink/postgres-backrest:18.1 .
+# Using update.sh (recommended)
+./update.sh <version>
+docker build -t ethoslink/postgres-backrest:<version> .
+
+# Or directly with build-arg
+docker build --build-arg POSTGRES_VERSION=18.2 -t ethoslink/postgres-backrest:18.2 .
 ```
 
 ## Security & Maintenance
@@ -141,11 +146,36 @@ The image is based on the official Debian-based PostgreSQL image and installs `p
 
 The image is published to:
 
-- **GitHub**: <https://github.com/ethos-link/postgres-backrest>
-- **Docker Hub**: <https://hub.docker.com/r/ethoslink/postgres-backrest>
-- **GitHub Container Registry**: <https://ghcr.io/ethos-link/postgres-backrest>
+- **GitHub**: https://github.com/ethos-link/postgres-backrest
+- **Docker Hub**: https://hub.docker.com/r/ethoslink/postgres-backrest
+- **GitHub Container Registry**: https://ghcr.io/ethos-link/postgres-backrest
 
-To update to a new PostgreSQL version, pass a different `POSTGRES_VERSION` build-arg (or change the Dockerfile default) and rebuild.
+## Creating a Release
+
+To bump the PostgreSQL version and create a new release:
+
+```bash
+# Bump the version (updates Dockerfile + VERSION file)
+./update.sh 18.3
+
+# Commit and push
+git add -A && git commit -m "Bump PostgreSQL to 18.3"
+git push origin <branch>
+```
+
+Then create a PR and merge to `master`. GitHub Actions will:
+
+1. Build and push the Docker image with the new version tag
+2. Create a git tag (e.g., `18.3`)
+3. Create a GitHub Release with "PostgreSQL 18.3"
+
+You can also pass a version manually to trigger a workflow dispatch:
+
+```bash
+# Via GitHub UI to manually trigger a build
+# Or via CLI:
+gh workflow run publish.yml -f postgres_version=18.3
+```
 
 ## License
 

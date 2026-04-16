@@ -14,5 +14,8 @@ NEW_VERSION="$1"
 # Update the default ARG in Dockerfile
 sed -i "s/ARG POSTGRES_VERSION=.*/ARG POSTGRES_VERSION=${NEW_VERSION}/" Dockerfile
 
-echo "Updated Dockerfile to use PostgreSQL version ${NEW_VERSION}"
+# Update VERSION file
+echo "${NEW_VERSION}" > VERSION
+
+echo "Updated Dockerfile and VERSION file to use PostgreSQL version ${NEW_VERSION}"
 echo "You can now build and test the image."
