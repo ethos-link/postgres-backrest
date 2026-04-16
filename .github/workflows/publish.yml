@@ -50,6 +50,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read VERSION
+        id: version
+        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -71,10 +75,6 @@ jobs:
       - name: Extract first Docker tag
         id: extract_tag
         run: echo "tag=$(echo '${{ steps.meta.outputs.tags }}' | head -n 1)" >> $GITHUB_OUTPUT
-
-      - name: Read VERSION
-        id: version
-        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         id: build
