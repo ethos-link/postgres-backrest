@@ -1,4 +1,4 @@
-ARG POSTGRES_VERSION=18.1
+ARG POSTGRES_VERSION=18.2
 FROM postgres:${POSTGRES_VERSION}
 
 # ensure setpriv works as expected

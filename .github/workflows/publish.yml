@@ -3,7 +3,6 @@ name: Publish Docker Image
 on:
   push:
     branches: ['master']
-    tags: ['v*']
   pull_request:
     branches: ['master']
   workflow_dispatch:
@@ -22,7 +21,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
       security-events: write # Required for Trivy SARIF (if used) or just in case
 
@@ -66,12 +65,16 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ inputs.postgres_version || '18.1' }}
+            type=raw,value=${{ steps.version.outputs.VERSION }}
             type=sha
 
       - name: Extract first Docker tag
         id: extract_tag
         run: echo "tag=$(echo '${{ steps.meta.outputs.tags }}' | head -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Read VERSION
+        id: version
+        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         id: build
@@ -89,7 +92,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           build-args: |
-            POSTGRES_VERSION=${{ inputs.postgres_version || '18.1' }}
+            POSTGRES_VERSION=${{ steps.version.outputs.VERSION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -105,4 +108,24 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+
+      - name: Create Git Tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          release_name: PostgreSQL ${{ steps.version.outputs.VERSION }}
+          body: |
+            PostgreSQL ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
 
