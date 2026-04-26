@@ -7,7 +7,11 @@
 
 A production-ready PostgreSQL image with PgBackRest preinstalled and sensible default configuration.
 
-This image is maintained by **[Ethos Link](https://ethos-link.com)**. It is a small, reusable extract from operational work we do for **[Reviato](https://www.reviato.com)**, a review intelligence product built by Ethos Link.
+This image is maintained by **[Ethos Link](https://ethos-link.com)**. It is a small, reusable extract from operational work we do for **[Reviato](https://www.reviato.com)**.
+
+**Capture. Interpret. Act.**
+
+Turn guest feedback into clear next steps for your team. Collect private appraisals, spot patterns across reviews, and act before small issues turn into public ones.
 
 The goal is simple: make it easy to run Postgres with backups and predictable configuration without turning your repo into an ops research project.
 
@@ -17,7 +21,7 @@ We believe in open source and sharing operational knowledge.
 If you like this project, see:
 
 - **[git-markdown](https://github.com/ethos-link/git-markdown)**: A tool to convert git repos into LLM-friendly markdown.
-- **[Reviato](https://www.reviato.com)**: Intelligent review management for automated businesses.
+- **[Reviato](https://www.reviato.com)**: Guest feedback workflows for hospitality operators.
 
 ---
 
