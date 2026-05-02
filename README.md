@@ -133,11 +133,46 @@ To build the image locally with a specific PostgreSQL version:
 ```bash
 # Using update.sh (recommended)
 ./update.sh <version>
-docker build -t ethoslink/postgres-backrest:<version> .
+docker build --build-arg POSTGRES_VERSION=<version> -t ethoslink/postgres-backrest:<version> .
 
 # Or directly with build-arg
 docker build --build-arg POSTGRES_VERSION=18.2 -t ethoslink/postgres-backrest:18.2 .
 ```
+
+To publish the multi-arch image for `linux/amd64` and `linux/arm64`, use
+Buildx:
+
+```bash
+docker login docker.io
+docker login ghcr.io
+./build.sh
+```
+
+The script pushes both the version tag and `latest` to Docker Hub and GHCR.
+`POSTGRES_VERSION` is the upstream base image tag. `IMAGE_VERSION` is this
+image's published release tag. Keep them separate when rebuilding this image on
+the same PostgreSQL release.
+
+For image-only rebuilds, prefer a revision suffix such as `18.3-r1` over
+`18.3.1`, because `18.3.1` can be mistaken for an upstream PostgreSQL patch
+version.
+
+Override `PLATFORMS`, `POSTGRES_VERSION`, `IMAGE_VERSION`, `PUBLISH_LATEST`,
+or `IMAGES` when needed:
+
+```bash
+PLATFORMS=linux/amd64,linux/arm64 \
+POSTGRES_VERSION=18.3 \
+IMAGE_VERSION=18.3-r1 \
+IMAGES="docker.io/ethoslink/postgres-backrest ghcr.io/ethos-link/postgres-backrest" \
+./build.sh
+```
+
+`build.sh` refuses to publish an image version that already exists in any
+target registry. Use a new `IMAGE_VERSION` for normal releases.
+
+The GitHub Actions publish workflow also builds and pushes
+`linux/amd64,linux/arm64` on `master`.
 
 ## Security & Maintenance
 
@@ -159,7 +194,7 @@ The image is published to:
 To bump the PostgreSQL version and create a new release:
 
 ```bash
-# Bump the version (updates Dockerfile + VERSION file)
+# Bump the base and image versions
 ./update.sh 18.3
 
 # Commit and push
@@ -169,16 +204,26 @@ git push origin <branch>
 
 Then create a PR and merge to `master`. GitHub Actions will:
 
-1. Build and push the Docker image with the new version tag
-2. Create a git tag (e.g., `18.3`)
-3. Create a GitHub Release with "PostgreSQL 18.3"
+1. Refuse to publish if the image version tag already exists
+2. Build and push the Docker image with the new image version tag
+3. Create a git tag (e.g., `18.3`)
+4. Create a GitHub Release
 
-You can also pass a version manually to trigger a workflow dispatch:
+For an image-only rebuild on the same PostgreSQL base version, pass a revision:
+
+```bash
+./update.sh 18.3 -r=1
+```
+
+This keeps `POSTGRES_VERSION=18.3` and sets `IMAGE_VERSION=18.3-r1`.
+
+You can also pass a base version and revision manually to trigger a workflow
+dispatch:
 
 ```bash
 # Via GitHub UI to manually trigger a build
 # Or via CLI:
-gh workflow run publish.yml -f postgres_version=18.3
+gh workflow run publish.yml -f postgres_version=18.3 -f revision=1
 ```
 
 ## License

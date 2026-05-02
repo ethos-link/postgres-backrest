@@ -8,9 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       postgres_version:
-        description: 'PostgreSQL version to build'
-        required: true
-        default: '18.1'
+        description: 'PostgreSQL base image version to build from'
+        required: false
+      revision:
+        description: 'Image rebuild revision, e.g. 1 publishes <postgres_version>-r1'
+        required: false
 
 env:
   REGISTRY_DOCKER: docker.io
@@ -50,9 +52,49 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Read VERSION
+      - name: Read versions
         id: version
-        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
+        run: |
+          POSTGRES_VERSION="${{ github.event.inputs.postgres_version }}"
+          REVISION="${{ github.event.inputs.revision }}"
+
+          if [ -z "$POSTGRES_VERSION" ]; then
+            POSTGRES_VERSION="$(cat POSTGRES_VERSION)"
+          fi
+
+          if [ -n "$REVISION" ]; then
+            if ! [[ "$REVISION" =~ ^[1-9][0-9]*$ ]]; then
+              echo "Revision must be a positive integer." >&2
+              exit 1
+            fi
+
+            IMAGE_VERSION="$POSTGRES_VERSION-r$REVISION"
+          else
+            IMAGE_VERSION="$(cat VERSION)"
+          fi
+
+          echo "POSTGRES_VERSION=$POSTGRES_VERSION" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_VERSION=$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Refuse existing release tag
+        if: github.event_name != 'pull_request'
+        run: |
+          IMAGE_VERSION="${{ steps.version.outputs.IMAGE_VERSION }}"
+
+          for image in \
+            "${{ env.REGISTRY_DOCKER }}/ethoslink/postgres-backrest" \
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}"
+          do
+            if docker buildx imagetools inspect "$image:$IMAGE_VERSION" >/dev/null 2>&1; then
+              echo "Refusing to overwrite existing image tag: $image:$IMAGE_VERSION" >&2
+              exit 1
+            fi
+          done
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$IMAGE_VERSION" >/dev/null 2>&1; then
+            echo "Refusing to recreate existing git tag: $IMAGE_VERSION" >&2
+            exit 1
+          fi
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
@@ -62,15 +104,13 @@ jobs:
             ${{ env.REGISTRY_DOCKER }}/ethoslink/postgres-backrest
             ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=tag
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.version.outputs.VERSION }}
+            type=raw,value=${{ steps.version.outputs.IMAGE_VERSION }}
             type=sha
+          labels: |
+            org.opencontainers.image.version=${{ steps.version.outputs.IMAGE_VERSION }}
+            org.opencontainers.image.base.name=docker.io/library/postgres:${{ steps.version.outputs.POSTGRES_VERSION }}
 
       - name: Extract first Docker tag
         id: extract_tag
@@ -92,7 +132,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           build-args: |
-            POSTGRES_VERSION=${{ steps.version.outputs.VERSION }}
+            POSTGRES_VERSION=${{ steps.version.outputs.POSTGRES_VERSION }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -112,7 +152,7 @@ jobs:
       - name: Create Git Tag
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
+          VERSION="${{ steps.version.outputs.IMAGE_VERSION }}"
           git tag "$VERSION"
           git push origin "$VERSION"
 
@@ -122,10 +162,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          release_name: PostgreSQL ${{ steps.version.outputs.VERSION }}
+          tag_name: ${{ steps.version.outputs.IMAGE_VERSION }}
+          release_name: Image ${{ steps.version.outputs.IMAGE_VERSION }} for PostgreSQL ${{ steps.version.outputs.POSTGRES_VERSION }}
           body: |
-            PostgreSQL ${{ steps.version.outputs.VERSION }}
+            PostgreSQL base image: ${{ steps.version.outputs.POSTGRES_VERSION }}
+            Image version: ${{ steps.version.outputs.IMAGE_VERSION }}
           draft: false
           prerelease: false
-
