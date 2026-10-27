@@ -1,9 +1,19 @@
 # Changelog
 
-## Unreleased
+## 18.6
+
+- Update the PostgreSQL base image and image release to 18.6.
 
 ### Documentation
 - Docs(readme): showcase EthosLink products and open source
+
+
+### Fixes
+- Fix(backups): resolve template defaults before substitution
+
+
+### Maintenance
+- Ci(git): migrate integration and release workflows to main
 
 ## 18.4
 
