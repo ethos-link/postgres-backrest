@@ -1,0 +1,18 @@
+# Included by the host's /etc/logrotate.conf and run by logrotate.timer.
+"${LOG_DIRECTORY}/*.log" {
+    su ${LOG_UID} ${LOG_GID}
+    daily
+    maxsize 25M
+    # Allow hourly rotations without reducing history to fourteen files.
+    rotate 336
+    maxage 14
+    olddir rotated
+    createolddir 0750 ${LOG_UID} ${LOG_GID}
+    dateext
+    dateformat -%Y%m%d%H%M%S
+    compress
+    missingok
+    notifempty
+    # pgBackRest keeps an O_APPEND descriptor open. Preserve its inode and mode.
+    copytruncate
+}

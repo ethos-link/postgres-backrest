@@ -1,0 +1,3 @@
+# Only closed rotations live here. Never age-clean the live *.log directory.
+# m: uses modification time, so viewing a rotation does not extend retention.
+e ${LOG_DIRECTORY}/rotated - - - m:14d -

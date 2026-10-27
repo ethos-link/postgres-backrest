@@ -133,6 +133,21 @@ Common env vars referenced by the default template:
 - `PGBACKREST_COMPRESS_LEVEL`
 - `PGBACKREST_PG1_PATH`
 
+File and console logging default to `info` (including warnings and errors).
+Use `docker exec --user postgres <container> pgbackrest-docker --stanza=main backup`
+for scheduled backups: the helper sends output to Docker's logger and disables
+duplicate file logging for that invocation. Use plain `pgbackrest` for archiving;
+detached asynchronous workers need their file logs at `/var/log/pgbackrest`.
+Set `PGBACKREST_LOG_LEVEL_FILE=debug` explicitly for troubleshooting.
+
+Production deployments should bind-mount the file log directory and install the
+[`ops/`](ops/) configuration for the host's existing `logrotate.timer` and native
+tmpfiles cleanup. Docker rotates console logs; OS logrotate handles file logs.
+The image runs no scheduler or log tailer. See the [logging operations guide](docs/logging.md)
+for Docker settings, installation, 14-day file retention, migration, safe cleanup,
+archive health checks and rollback. Upgrading the image alone does not install
+the host rotation policy.
+
 ---
 
 ## Building
