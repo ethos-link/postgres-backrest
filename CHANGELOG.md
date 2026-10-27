@@ -1,5 +1,15 @@
 # Changelog
 
+## 18.6-r1
+
+- Default pgBackRest file logging to `info`, with explicit debug overrides.
+- Send scheduled backup and expiration output to Docker without duplicate file logs.
+- Rotate and compress remaining file logs using native OS logrotate, with
+  approximately fourteen days of history and native cleanup of inactive rotations.
+- Keep the PostgreSQL base version at 18.6. File rotation requires installing the
+  host configuration, and scheduled jobs must use the Docker logging helper;
+  see the [logging deployment guide](docs/logging.md).
+
 ## 18.6
 
 - Update the PostgreSQL base image and image release to 18.6.
