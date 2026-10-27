@@ -1,0 +1,10 @@
+[Unit]
+Description=Check pgBackRest log sizes hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

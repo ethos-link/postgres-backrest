@@ -1,0 +1,10 @@
+[Unit]
+Description=Rotate and expire pgBackRest diagnostic logs
+
+[Service]
+Type=oneshot
+StateDirectory=pgbackrest-logrotate
+UMask=0077
+ExecStart=/usr/local/sbin/rotate-pgbackrest-logs /etc/pgbackrest-logrotate.conf /var/lib/pgbackrest-logrotate/status /var/log/ethos-postgres-18/pgbackrest
+Nice=10
+IOSchedulingClass=idle

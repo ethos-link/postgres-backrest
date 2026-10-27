@@ -133,6 +133,15 @@ Common env vars referenced by the default template:
 - `PGBACKREST_COMPRESS_LEVEL`
 - `PGBACKREST_PG1_PATH`
 
+File and console logging default to `info` (including warnings and errors).
+Set `PGBACKREST_LOG_LEVEL_FILE=debug` explicitly for troubleshooting. Logs default
+to `/var/log/pgbackrest`; the image does not run a scheduler. Production deployments
+should use the dedicated log bind mount and hourly host systemd timer supplied in
+[`ops/`](ops/). See the [logging operations guide](docs/logging.md) for installation,
+14-day retention, migration, safe oversized-log cleanup, archive health checks,
+deployment and rollback instructions. Installing the host timer is required for
+automatic rotation; upgrading the image alone does not enable it.
+
 ---
 
 ## Building

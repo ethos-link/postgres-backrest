@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 CONFIG STATE LOG_DIRECTORY" >&2
+  exit 2
+fi
+
+logrotate --state "$2" "$1"
+# logrotate's maxage only runs when a live log rotates. Expire rotated files
+# from inactive commands too. Never follow symlinks or touch live *.log files.
+find "$3" -regextype posix-extended -maxdepth 1 -type f \
+  -regex '.*/[^/]+\.log-[0-9]{14}(\.gz)?' -mmin +20160 -delete

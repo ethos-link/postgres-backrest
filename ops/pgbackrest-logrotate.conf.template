@@ -1,0 +1,16 @@
+# Invoked only by pgbackrest-logrotate.timer, not the host's daily logrotate job.
+"${LOG_DIRECTORY}/*.log" {
+    su ${LOG_UID} ${LOG_GID}
+    daily
+    maxsize 25M
+    # Up to one rotation per hour for 14 days; maxage also limits quiet logs.
+    rotate 336
+    maxage 14
+    dateext
+    dateformat -%Y%m%d%H%M%S
+    compress
+    missingok
+    notifempty
+    # pgBackRest keeps an O_APPEND descriptor open. Preserve its inode and mode.
+    copytruncate
+}
