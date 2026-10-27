@@ -179,7 +179,7 @@ IMAGES="docker.io/ethoslink/postgres-backrest ghcr.io/ethos-link/postgres-backre
 target registry. Use a new `IMAGE_VERSION` for normal releases.
 
 The GitHub Actions publish workflow also builds and pushes
-`linux/amd64,linux/arm64` on `master`.
+`linux/amd64,linux/arm64` on `main`.
 
 ## Security & Maintenance
 
@@ -205,11 +205,11 @@ To bump the PostgreSQL version and create a new release:
 ./update.sh 18.3
 
 # Commit and push
-git add -A && git commit -m "Bump PostgreSQL to 18.3"
+git add -A && git commit -m "build(release): bump PostgreSQL to 18.3" -m "Update the base image and release version together."
 git push origin <branch>
 ```
 
-Then create a PR and merge to `master`. GitHub Actions will:
+Then create a PR and merge to `main`. GitHub Actions will:
 
 1. Refuse to publish if the image version tag already exists
 2. Build and push the Docker image with the new image version tag

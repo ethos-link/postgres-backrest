@@ -1,0 +1,12 @@
+pre-commit:
+  commands:
+    protect-integration-branches:
+      run: |
+        branch=$(git branch --show-current)
+        case "$branch" in
+          main|master) echo "Create a topic branch before committing." >&2; exit 1 ;;
+        esac
+commit-msg:
+  commands:
+    commitlint:
+      run: npx --yes --package=@commitlint/cli@19 -- commitlint --edit {1}
