@@ -7,6 +7,18 @@ POSTGRES_HBA_FILE_DEFAULT="/etc/postgresql/pg_hba.conf"
 POSTGRES_CONFIG_FILE="${POSTGRES_CONFIG_FILE:-$POSTGRES_CONFIG_FILE_DEFAULT}"
 POSTGRES_HBA_FILE="${POSTGRES_HBA_FILE:-$POSTGRES_HBA_FILE_DEFAULT}"
 
+# Resolve defaults in the shell; envsubst only expands variable references.
+export PGBACKREST_REPO1_PATH="${PGBACKREST_REPO1_PATH:-/var/lib/pgbackrest}"
+export PGBACKREST_REPO1_RETENTION_FULL="${PGBACKREST_REPO1_RETENTION_FULL:-7}"
+export PGBACKREST_REPO1_RETENTION_DIFF="${PGBACKREST_REPO1_RETENTION_DIFF:-30}"
+export PGBACKREST_PROCESS_MAX="${PGBACKREST_PROCESS_MAX:-4}"
+export PGBACKREST_LOG_LEVEL_CONSOLE="${PGBACKREST_LOG_LEVEL_CONSOLE:-info}"
+export PGBACKREST_LOG_LEVEL_FILE="${PGBACKREST_LOG_LEVEL_FILE:-debug}"
+export PGBACKREST_LOG_PATH="${PGBACKREST_LOG_PATH:-/var/log/pgbackrest}"
+export PGBACKREST_COMPRESS_TYPE="${PGBACKREST_COMPRESS_TYPE:-zst}"
+export PGBACKREST_COMPRESS_LEVEL="${PGBACKREST_COMPRESS_LEVEL:-6}"
+export PGBACKREST_PG1_PATH="${PGBACKREST_PG1_PATH:-${PGDATA:-/var/lib/postgresql/data}}"
+
 # Render pgbackrest.conf from the template using env vars if template exists.
 if [ -f /usr/local/share/pgbackrest/pgbackrest.conf.template ]; then
   envsubst </usr/local/share/pgbackrest/pgbackrest.conf.template >/etc/pgbackrest/pgbackrest.conf

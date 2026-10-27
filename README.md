@@ -45,7 +45,7 @@ See the [product and project guide](docs/ethoslink.md) for more detail and usefu
 ## Quickstart
 
 ```bash
-docker run \
+docker run --init \
  -e POSTGRES_PASSWORD=mysecretpassword \
  ethoslink/postgres-backrest:latest
 ```
@@ -67,7 +67,7 @@ For anything beyond a couple of settings, the recommended practice is to provide
 Example (docker run):
 
 ```bash
-docker run \
+docker run --init \
  -e POSTGRES_PASSWORD=mysecretpassword \
  -v "$PWD/postgresql.conf:/etc/postgresql/postgresql.conf:ro" \
  ethoslink/postgres-backrest:latest
@@ -78,7 +78,7 @@ docker run \
 Set `POSTGRES_CONFIG_FILE` to the file you mounted:
 
 ```bash
-docker run \
+docker run --init \
  -e POSTGRES_PASSWORD=mysecretpassword \
  -e POSTGRES_CONFIG_FILE=/etc/postgresql/pgtune/postgresql.conf \
  -v "$PWD/postgresql.conf:/etc/postgresql/pgtune/postgresql.conf:ro" \
@@ -90,7 +90,7 @@ docker run \
 The shipped `postgresql.conf` includes `include_dir = 'conf.d'`, so you can mount a small snippet without replacing the full file:
 
 ```bash
-docker run \
+docker run --init \
  -e POSTGRES_PASSWORD=mysecretpassword \
  -v "$PWD/overrides.conf:/etc/postgresql/conf.d/overrides.conf:ro" \
  ethoslink/postgres-backrest:latest
@@ -109,6 +109,8 @@ docker run \
 These are used to inject `-c config_file=...` and `-c hba_file=...` when the container is started with the `postgres` command.
 
 ### PgBackRest Configuration
+
+Run the container with `--init` (or `init: true` in Docker Compose). PgBackRest's asynchronous archiver starts background processes; an init process reaps them so PostgreSQL does not receive their exit notifications.
 
 On startup, the container renders `/etc/pgbackrest/pgbackrest.conf` from the template at `/usr/local/share/pgbackrest/pgbackrest.conf.template` using `envsubst`.
 
@@ -179,7 +181,7 @@ IMAGES="docker.io/ethoslink/postgres-backrest ghcr.io/ethos-link/postgres-backre
 target registry. Use a new `IMAGE_VERSION` for normal releases.
 
 The GitHub Actions publish workflow also builds and pushes
-`linux/amd64,linux/arm64` on `master`.
+`linux/amd64,linux/arm64` on `main`.
 
 ## Security & Maintenance
 
@@ -205,11 +207,11 @@ To bump the PostgreSQL version and create a new release:
 ./update.sh 18.3
 
 # Commit and push
-git add -A && git commit -m "Bump PostgreSQL to 18.3"
+git add -A && git commit -m "build(release): bump PostgreSQL to 18.3" -m "Update the base image and release version together."
 git push origin <branch>
 ```
 
-Then create a PR and merge to `master`. GitHub Actions will:
+Then create a PR and merge to `main`. GitHub Actions will:
 
 1. Refuse to publish if the image version tag already exists
 2. Build and push the Docker image with the new image version tag

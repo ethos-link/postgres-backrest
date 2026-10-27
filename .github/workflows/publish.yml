@@ -2,9 +2,9 @@ name: Publish Docker Image
 
 on:
   push:
-    branches: ['master']
+    branches: ['main']
   pull_request:
-    branches: ['master']
+    branches: ['main']
   workflow_dispatch:
     inputs:
       postgres_version:
@@ -150,14 +150,14 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Create Git Tag
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           VERSION="${{ steps.version.outputs.IMAGE_VERSION }}"
           git tag "$VERSION"
           git push origin "$VERSION"
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
