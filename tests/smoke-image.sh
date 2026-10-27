@@ -18,6 +18,14 @@ done
 output="$(docker run --rm --mount type=tmpfs,destination=/var/lib/postgresql \
   -e PGBACKREST_LOG_LEVEL_FILE=debug "$image" pgbackrest help backup log-level-file)"
 [[ "$output" == *'current: debug'* ]]
+# The Docker helper avoids file duplication but keeps explicit CLI debugging.
+for level in off debug; do
+  options=()
+  if [ "$level" = debug ]; then options+=(--log-level-file=debug); fi
+  output="$(docker run --rm --mount type=tmpfs,destination=/var/lib/postgresql \
+    "$image" pgbackrest-docker "${options[@]}" help backup log-level-file)"
+  [[ "$output" == *"current: $level"* ]]
+done
 output="$(docker run --rm --mount type=tmpfs,destination=/var/lib/postgresql \
   "$image" pgbackrest --log-level-file=debug help backup log-level-file)"
 [[ "$output" == *'current: debug'* ]]
@@ -44,6 +52,7 @@ chmod 777 "$temporary/logs"
 # Two disposable containers demonstrate regeneration and log persistence.
 for iteration in 1 2; do
   docker run -d --init --name "$name" \
+    --log-driver local --log-opt max-size=25m --log-opt max-file=14 --log-opt compress=true \
     --mount type=tmpfs,destination=/var/lib/postgresql \
     --mount type=tmpfs,destination=/var/lib/pgbackrest,tmpfs-mode=0777 \
     -v "$temporary/logs:/var/log/pgbackrest:Z" \
@@ -67,7 +76,25 @@ for iteration in 1 2; do
     failures_before="$(docker exec "$name" psql -U postgres -Atc 'SELECT failed_count FROM pg_stat_archiver')"
     docker exec "$name" psql -U postgres -v ON_ERROR_STOP=1 -c \
       "CREATE TABLE logging_smoke AS SELECT 42 AS answer;"
-    docker exec "$name" pgbackrest --stanza=main --type=full backup
+    # Scheduled commands explicitly forward both streams to Docker's logger,
+    # with file logging disabled for that invocation to avoid duplicate records.
+    docker exec "$name" pgbackrest-docker --stanza=main --type=full backup
+    docker exec "$name" sh -ec 'test ! -e /var/log/pgbackrest/main-backup.log; test ! -e /var/log/pgbackrest/main-expire.log'
+    output="$(docker logs "$name" 2>&1)"
+    [[ "$output" == *'backup command end: completed successfully'* ]]
+    [[ "$output" == *'expire command end: completed successfully'* ]]
+    # CLI errors must retain their exit status and reach Docker too.
+    if docker exec "$name" pgbackrest-docker --invalid-docker-logging-probe; then
+      echo 'Expected a nonzero status for an invalid pgBackRest option.' >&2
+      exit 1
+    fi
+    output="$(docker logs "$name" 2>&1)"
+    [[ "$output" == *"invalid-docker-logging-probe"* ]]
+    # Async commands must not accidentally lose their detached-worker logs.
+    if docker exec "$name" pgbackrest-docker --stanza=main archive-push; then
+      echo 'Expected the Docker helper to reject archive commands.' >&2
+      exit 1
+    fi
     docker exec "$name" pgbackrest --stanza=main --output=json info > "$temporary/info.json"
     python3 - "$temporary/info.json" <<'PY'
 import json, sys
@@ -77,6 +104,8 @@ assert stanza['backup'], stanza
 assert stanza['archive'][0]['max'], stanza
 PY
     docker exec "$name" pgbackrest --stanza=main check
+    output="$(docker logs "$name" 2>&1)"
+    [[ "$output" == *'archive-push command begin'* ]]
     failures_after="$(docker exec "$name" psql -U postgres -Atc 'SELECT failed_count FROM pg_stat_archiver')"
     test "$failures_before" = "$failures_after"
     # Check real async command logging and actual repository receipt, beyond
@@ -108,4 +137,4 @@ PY
   docker rm -f "$name" >/dev/null
   container_started=false
 done
-echo 'PASS: effective logging, explicit debug, fallback, backup, async archive and recreation'
+echo 'PASS: Docker logging, effective settings, explicit debug, backup, async archive and recreation'

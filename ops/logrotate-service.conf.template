@@ -1,0 +1,3 @@
+# Allow this dedicated mount if the distribution hardens logrotate's filesystem.
+[Service]
+ReadWritePaths=${LOG_DIRECTORY}

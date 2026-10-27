@@ -1,11 +1,13 @@
-# Invoked only by pgbackrest-logrotate.timer, not the host's daily logrotate job.
+# Included by the host's /etc/logrotate.conf and run by logrotate.timer.
 "${LOG_DIRECTORY}/*.log" {
     su ${LOG_UID} ${LOG_GID}
     daily
     maxsize 25M
-    # Up to one rotation per hour for 14 days; maxage also limits quiet logs.
+    # Allow hourly rotations without reducing history to fourteen files.
     rotate 336
     maxage 14
+    olddir rotated
+    createolddir 0750 ${LOG_UID} ${LOG_GID}
     dateext
     dateformat -%Y%m%d%H%M%S
     compress

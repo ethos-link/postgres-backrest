@@ -64,7 +64,49 @@ window. Restore `info` afterwards. Editing the template alone does not update an
 already rendered file or an existing process environment. Prefer a command-level
 override when investigating backup operations to avoid a database restart.
 
-## Rotation design
+## Docker console logging
+
+Keep `log-level-console=info` so foreground messages, warnings and errors reach
+standard output/error. The shipped PostgreSQL archive command inherits Docker's
+streams, so its foreground output appears in `docker logs`. Detached async workers
+close those streams; preserve their file logging at `info`.
+
+`docker exec ... pgbackrest backup` attaches output to the exec client, which
+Docker does not automatically add to the container's main log stream. Use the
+shipped helper for scheduled backup/expire commands:
+
+```bash
+docker exec --user postgres ethos-postgres-18 \
+  pgbackrest-docker --stanza=main --type=full backup
+# Expire is normally automatic after backup. For an existing standalone job:
+docker exec --user postgres ethos-postgres-18 \
+  pgbackrest-docker --stanza=main expire
+```
+
+`pgbackrest-docker` forwards both streams to PID 1's Docker-connected descriptors,
+preserves the pgBackRest exit status, and disables file logging for that invocation
+to avoid duplicate records. An explicit `--log-level-file=debug` still overrides
+that setting. It starts no background process and cannot be used for
+`archive-push`/`archive-get`, whose detached-worker diagnostics need file logging.
+Use it inside this image, as the same `postgres` UID as PID 1, with `--init` and
+without a TTY. Descriptor permission errors fail the command visibly.
+
+Keep plain `pgbackrest` for interactive commands or machine-readable results
+such as `docker exec ... pgbackrest --output=json info`: the helper deliberately
+sends output to Docker rather than returning it to the exec client. Existing
+external backup schedules must be updated to call the helper; this repository
+contains no production backup scheduler. Plain pgBackRest retains its global
+`info` file fallback, which the OS policy also rotates.
+
+Configure Docker's existing logger to bound console log storage. The deployment
+example uses the built-in `local` driver, with compression and fourteen 25 MiB
+files. This is a size/file-count limit, **not fourteen days** of console retention.
+Retain an existing centrally managed driver if one already supplies rotation and
+retention. Docker owns these files; never run OS logrotate against Docker's log
+storage. See [Docker logging](https://docs.docker.com/engine/logging/)
+and the [local driver](https://docs.docker.com/engine/logging/drivers/local/).
+
+## Native OS rotation of remaining file logs
 
 Use a dedicated host bind mount:
 
@@ -72,79 +114,74 @@ Use a dedicated host bind mount:
 /var/log/ethos-postgres-18/pgbackrest -> /var/log/pgbackrest
 ```
 
-This keeps diagnostic logs outside the database and backup directories, makes
-host disk accounting straightforward, and preserves logs across container
-recreation. Keep the existing mounts exactly as deployed:
+Logs survive container recreation and are visible to normal host tools. Preserve
+both existing PostgreSQL and backup mounts:
 
 ```
 /srv/platform/postgres-18           -> /var/lib/postgresql
 /srv/platform/postgres-18/pgbackrest -> /var/lib/pgbackrest
 ```
 
-`ops/install-log-rotation.sh` installs a host systemd oneshot service and enables
-and starts its hourly timer. No scheduler or additional daemon runs inside the
-database container, and no dependency is added to the image. The host needs
-systemd, logrotate, gzip, GNU find/df and envsubst (Debian/Ubuntu packages:
-`logrotate gzip findutils coreutils gettext-base`). The timer also works while
-Docker is stopped. It persists across host reboot and catches up after downtime. Monitor
-service failures through the host's existing systemd monitoring.
+The host needs systemd 249+ with its distribution's `logrotate.timer`,
+`logrotate.service` and `systemd-tmpfiles-clean.timer`, plus logrotate, gzip,
+findutils, coreutils and gettext-base. The installer adds configuration to these
+existing OS facilities; there is no custom rotation service, scheduler, expiry
+script, log tailer or additional container daemon.
 
-The dedicated `/etc/pgbackrest-logrotate.conf` is deliberately outside
-`/etc/logrotate.d`, so the host daily job cannot compete with this timer.
-The installer renders the service and rotation policy from the same log directory,
-including the expiry argument and systemd write allowlist. Its optional third
-argument selects a different absolute host log directory. Paths must use only
-letters, digits, `_`, `.`, `/` and `-`, without trailing slashes or `.`/`..`
-components. Home and temporary directories hidden by the service sandbox are
-rejected. Use a dedicated directory outside database/backup storage.
+| Installed configuration | Responsibility |
+| --- | --- |
+| `/etc/logrotate.d/pgbackrest` | Daily/25 MiB rotation, gzip, ownership and count limits |
+| `/etc/systemd/system/logrotate.timer.d/pgbackrest-hourly.conf` | Check the existing host rotation policies hourly |
+| `/etc/systemd/system/logrotate.service.d/pgbackrest.conf` | Allow the dedicated directory through OS service filesystem restrictions |
+| `/etc/tmpfiles.d/pgbackrest.conf` | Native age cleanup of closed rotations from inactive commands |
 
-The oneshot runs with `ProtectSystem=strict`, `ProtectHome=true`, `PrivateTmp=true`
-and `NoNewPrivileges=true`. Only the selected log directory and systemd-managed
-state directory are writable, apart from its private temporary directories.
+The installer enables/starts the OS timers and restarts `logrotate.timer` to
+apply its drop-in. The hourly schedule applies **host-wide**: daily/weekly
+policies remain daily/weekly, while other size-based policies may also rotate
+sooner. Inspect the host's existing configuration before deployment. Keep the
+OS service's hardening and its standard state file; there is no second state file
+or competing pgBackRest rotation job. The host's `/etc/logrotate.conf` must include
+`/etc/logrotate.d`, as the distribution default does.
 
-- Check every hour; rotate all `*.log` files daily, or earlier at **25 MiB**.
-- Compress immediately with gzip, including the latest rotation.
-- Keep up to **336** rotations per log (24 × 14), with **14-day** maximum age.
-  Extra forced manual rotations can shorten that history.
-- The hourly runner also expires matching timestamped rotations older than 14
-  days when the original log is empty, missing or inactive. It does not traverse
-  subdirectories, follow symlinks, or expire live `*.log` files.
-- Use second-resolution timestamp suffixes to allow multiple daily rotations.
-- Keep state at `/var/lib/pgbackrest-logrotate/status` on the host, independently
-  of the container and PostgreSQL mounts.
-- Use the PostgreSQL process's **host** UID/GID for rotation. `copytruncate`
-  preserves the live inode, ownership and mode (pgBackRest normally creates
-  `0640` logs). Missing and empty logs are harmless.
+File policy:
 
-pgBackRest opens its log with `O_APPEND` and keeps the descriptor open; it has no
-log-reopen hook used by this deployment. Renaming and creating a fresh file could
-leave an async worker writing indefinitely into a rotated/deleted inode. Use
-`copytruncate` to retain that descriptor without signalling or stopping archiving.
-There is a small race between copying and truncating during which diagnostic
-messages can be lost. This is not a lossless audit-log mechanism; database/WAL
-and repository files are never involved. This tradeoff avoids interrupting WAL
-archiving. See [pgBackRest's log implementation](https://github.com/pgbackrest/pgbackrest/blob/main/src/common/log.c)
-and the [logrotate manual](https://github.com/logrotate/logrotate/blob/main/logrotate.8.in).
-Treat these files as operational diagnostics, not authoritative audit or integrity
-evidence. If lossless audit evidence is required, use a separately designed
-durable logging pipeline; changing this retention policy cannot supply it.
+- Rotate every `*.log` daily or when larger than 25 MiB at an hourly check.
+- Gzip immediately into the `rotated/` subdirectory, created as `0750` with the
+  supplied PostgreSQL host UID/GID. The live log inode and permissions survive.
+- Keep up to 336 rotations per log (24 × 14), plus `maxage 14`.
+- Logrotate only applies `maxage` when a live log rotates. For inactive or missing
+  originals, the OS tmpfiles cleaner expires files in `rotated/` after fourteen
+  days based on modification time (`m:14d`). Its stock daily schedule means age
+  cleanup can lag by roughly a day. Viewing an old file does not extend retention.
+- The cleaner never targets the directory containing live logs. Only closed
+  diagnostic rotations belong in `rotated/`; do not put other files there.
+- Missing and empty logs are harmless. Extra manual rotations can shorten history.
 
-The threshold is checked hourly, not a hard size cap. A fast writer can exceed
-25 MiB between checks. Before enabling the timer, the installer performs a
-read-only space check. Each scheduled invocation expires aged rotations first,
-then requires available bytes for copies of **all live logs plus the largest
-live log again plus 64 MiB**. This conservative estimate covers outstanding copies
-and one incompressible gzip output. If space is insufficient, the job fails visibly
-in the journal before copying or truncating any live log; it does not automatically
-clean up oversized live logs. It retries on the next hourly invocation.
+The installer renders rotation, expiry and filesystem-access paths from one host
+directory argument, with the existing path as default. Custom paths must be
+absolute and use only letters, digits, `_`, `.`, `/` and `-`, without trailing
+slashes or `.`/`..` components. Avoid home/private temporary directories hidden by
+OS service hardening. For a custom container `PGBACKREST_LOG_PATH`, mount the host
+directory there and pass the host directory as the installer's third argument.
 
-The check does not reserve disk space, bound I/O, or prevent a log/another writer
-from growing after the check. File count and age are bounded, but no policy can
-guarantee disk capacity under arbitrary log rates or scheduler failure. Use existing free-space alerts;
-use a dedicated filesystem/quota if a hard allocation limit is required. Keep
-production at `info`. For a custom container `PGBACKREST_LOG_PATH`, mount the host
-log directory at that container path and pass the host directory as the installer's
-third argument; reinstall to update rotation, expiry and the sandbox together.
+pgBackRest keeps an `O_APPEND` descriptor open and has no reopen hook used here.
+Logrotate's `copytruncate` preserves it without signalling the archiver; renaming
+a live log could leave a worker writing into the old inode indefinitely. There
+is a small diagnostic-message-loss window between copy and truncate. These logs
+are operational diagnostics, not authoritative audit/integrity evidence. WAL,
+backup and data files are outside both policies. See the
+[pgBackRest log implementation](https://github.com/pgbackrest/pgbackrest/blob/main/src/common/log.c),
+[logrotate manual](https://github.com/logrotate/logrotate/blob/main/logrotate.8.in)
+and [tmpfiles configuration](https://www.freedesktop.org/software/systemd/man/latest/tmpfiles.d.html).
+
+Hourly checks are not a hard cap; fast writers can exceed 25 MiB between checks.
+Copytruncate temporarily needs an uncompressed copy before compression. The
+installer performs a read-only capacity check for all live log sizes plus the
+largest log plus 64 MiB before enabling timers. Routine execution belongs entirely
+to OS logrotate: this is **not a recurring disk-space reservation or I/O limit**.
+Keep host free-space alerts; use a dedicated filesystem/quota for a hard capacity
+limit. Preserve diagnostics and explicitly reclaim the incident log before the
+first scheduled run if space is tight. No deployment step truncates live logs.
 
 ## Deployment (operator run; no automatic database restart)
 
@@ -167,6 +204,7 @@ files for ownership and the installer, rather than their container IDs.
    docker build -f - -t postgres-backrest:18.4-logging-r1 . <<'DOCKERFILE'
    FROM postgres-backrest:logging-base
    COPY --chmod=755 entrypoint.sh /usr/local/bin/pg-entrypoint.sh
+   COPY --chmod=755 pgbackrest-docker /usr/local/bin/pgbackrest-docker
    COPY pgbackrest.conf.template /usr/local/share/pgbackrest/pgbackrest.conf.template
    DOCKERFILE
    ```
@@ -216,6 +254,12 @@ files for ownership and the installer, rather than their container IDs.
      postgres:
        image: postgres-backrest:18.4-logging-r1
        init: true
+       logging:
+         driver: local
+         options:
+           max-size: "25m"
+           max-file: "14"
+           compress: "true"
        environment:
          PGBACKREST_LOG_LEVEL_FILE: info
          PGBACKREST_LOG_LEVEL_CONSOLE: info
@@ -234,33 +278,46 @@ files for ownership and the installer, rather than their container IDs.
    never truncates existing logs. If cleanup is skipped, the first scheduled
    rotation will copy/compress the oversized log and needs enough space.
 
-6. Install the host dependencies, then install and start the rotation timer:
+6. Inspect the host's native schedulers and install dependencies/configuration:
 
    ```bash
-   # Debian/Ubuntu host, if dependencies are not installed:
+   # Debian/Ubuntu host, if dependencies are missing:
    sudo apt-get update
    sudo apt-get install -y logrotate gzip findutils coreutils gettext-base
-   # Read the host IDs again if the image or user mapping has changed:
+   systemctl cat logrotate.timer logrotate.service systemd-tmpfiles-clean.timer
+   # Confirm the distribution config includes /etc/logrotate.d:
+   sudo grep -E '^include[[:space:]]+/etc/logrotate.d' /etc/logrotate.conf
    postgres_uid=$(sudo stat -c %u /var/log/ethos-postgres-18/pgbackrest)
    postgres_gid=$(sudo stat -c %g /var/log/ethos-postgres-18/pgbackrest)
    sudo ./ops/install-log-rotation.sh "$postgres_uid" "$postgres_gid"
-   # Custom host directory, if used instead (must already exist with these IDs):
+   # For a custom host directory, pass its own host UID/GID and path instead:
    # sudo ./ops/install-log-rotation.sh "$postgres_uid" "$postgres_gid" /srv/diagnostics/postgres
-   systemctl is-enabled pgbackrest-logrotate.timer
-   systemctl is-active pgbackrest-logrotate.timer
-   systemctl list-timers pgbackrest-logrotate.timer --all
-   sudo systemctl start pgbackrest-logrotate.service
-   sudo journalctl -u pgbackrest-logrotate.service --since today --no-pager
+   systemctl is-enabled logrotate.timer
+   systemctl is-active logrotate.timer systemd-tmpfiles-clean.timer
+   systemctl list-timers logrotate.timer systemd-tmpfiles-clean.timer --all
+   # A real normal rotation check for all host policies, when ready:
+   sudo systemctl start logrotate.service
+   sudo journalctl -u logrotate.service --since today --no-pager
    ```
 
-   The last `start` performs a real normal rotation check; omit it until ready to
-   rotate existing logs. Installation starts the timer, whose first scheduled or
-   catch-up execution also performs a normal rotation check. Installer failure is
-   an incomplete deployment: verify that the timer is both enabled and active.
-   An insufficient-space error aborts installation before changing installed files
-   or enabling the timer. Preserve useful diagnostics and explicitly reclaim space
-   with the one-time procedure below, then retry. During reinstall, an already
-   active timer remains active; its runtime space check also refuses unsafe copies.
+   Installation starts the existing timers. Their first scheduled/catch-up run
+   can rotate logs. The installer does not force rotation, truncate logs or
+   restart PostgreSQL/Docker. Its capacity preflight is read-only and aborts
+   before installation if insufficient; an already enabled OS timer continues
+   to operate. Timer activation or config-validation failure is an incomplete
+   deployment and must be resolved before leaving the host unattended.
+
+   If an earlier revision of this PR was installed for testing, first disable
+   `pgbackrest-logrotate.timer` and let its service finish. Remove only its old
+   service/timer, `/etc/pgbackrest-logrotate.conf` and
+   `/usr/local/sbin/rotate-pgbackrest-logs`; retain logs/state. Never run both the
+   old pgBackRest job and OS logrotate against the same live files. Closed
+   rotations from that older flat layout need an operator-managed move into
+   `rotated/` to join native age cleanup; installation does not move/delete them.
+
+7. Update existing scheduled backup/expire invocations to use `pgbackrest-docker`
+   and verify their messages through `docker logs`. Keep PostgreSQL's
+   `archive_command` using plain `pgbackrest`; no WAL behavior changes are needed.
 
 ## One-time reclaim of the existing 863 MB log
 
@@ -330,7 +387,7 @@ docker exec --user postgres ethos-postgres-18 \
   pgbackrest --stanza=main --output=json info
 # Searches compressed and current logs. Exit 1 can mean no matching messages.
 docker exec --user postgres ethos-postgres-18 sh -c \
-  'zgrep -hE "WARN|ERROR|dropped|DROP" /var/log/pgbackrest/*.log* | tail -n 100'
+  'zgrep -hE "WARN|ERROR|dropped|DROP" /var/log/pgbackrest/*.log /var/log/pgbackrest/rotated/*.gz | tail -n 100'
 docker logs --since 24h ethos-postgres-18 2>&1 \
   | grep -Ei 'archive|pgbackrest|warn|error' | tail -n 100
 # Inspect only: ready files should drain as natural WAL activity progresses.
@@ -379,31 +436,39 @@ smoke test runs that check and a real backup; production commands above do not.
 sudo du -sh /var/log/ethos-postgres-18/pgbackrest
 sudo df -h /var/log/ethos-postgres-18/pgbackrest
 docker inspect --size --format '{{.SizeRw}}' ethos-postgres-18
-# Parse and show rotation decisions, without changing logs/state:
-sudo logrotate --debug --state /var/lib/pgbackrest-logrotate/status /etc/pgbackrest-logrotate.conf
-# Normal manual check (same serialization as the timer):
-sudo systemctl start pgbackrest-logrotate.service
-# Explicit forced rotation, only if needed; avoid the hourly job running concurrently:
-sudo systemctl stop pgbackrest-logrotate.timer
-sudo /usr/local/sbin/rotate-pgbackrest-logs --check-space /var/log/ethos-postgres-18/pgbackrest
-sudo logrotate --force --state /var/lib/pgbackrest-logrotate/status /etc/pgbackrest-logrotate.conf
-sudo systemctl start pgbackrest-logrotate.timer
+docker inspect --format '{{json .HostConfig.LogConfig}}' ethos-postgres-18
+# Parse rotation decisions without changing any logs or state:
+sudo logrotate --debug /etc/logrotate.conf
+# Normal manual check through the existing OS service/state:
+sudo systemctl start logrotate.service
+# Native cleanup of only this policy's closed rotations:
+sudo systemd-tmpfiles --clean /etc/tmpfiles.d/pgbackrest.conf
+# Read-only preflight before any optional forced rotation:
+./ops/install-log-rotation.sh --check-space /var/log/ethos-postgres-18/pgbackrest
 ```
 
-Do not force twice in the same second (timestamp collision). A forced invocation
-should also wait for any running `pgbackrest-logrotate.service` to finish. Normal
-service starts are preferred. Review journal failures and timer status after
-installation and host reboot; monitor for new archive errors after rotation.
+For a forced rotation, stop `logrotate.timer`, wait for any running
+`logrotate.service` to finish, run `sudo logrotate --force
+/etc/logrotate.d/pgbackrest`, then restart `logrotate.timer` even if the forced
+command fails. Use the same state options as the OS service if the host customized
+them. Do not force twice in the same second (timestamp collision). Normal service
+starts are preferred. Check both OS timers after installation and host reboot;
+monitor native service failures and new archive errors after rotation.
 
-To roll back the image, deploy the previous image through the normal maintenance
-process while retaining the explicit `info` environment, corrected mounted
-template, log mount and host rotation. No data rollback is needed. To roll back
-rotation separately, run `sudo systemctl disable --now
-pgbackrest-logrotate.timer`, wait for a running service to finish, then remove
-only the installed service/timer, `/etc/pgbackrest-logrotate.conf` and
-`/usr/local/sbin/rotate-pgbackrest-logs`, and run `sudo systemctl daemon-reload`.
-Keep log files and state for investigation. Disabling rotation requires another
-rotation arrangement or logs will accumulate again.
+Rollback the image through the normal maintenance process, retaining explicit
+`info`, the corrected template, log mount and OS rotation. Change scheduled jobs
+back to plain pgBackRest if the older image lacks `pgbackrest-docker`; they will
+again write files governed by OS rotation. No database/data rollback is needed.
+
+To remove this rotation integration, remove only `/etc/logrotate.d/pgbackrest`,
+`/etc/tmpfiles.d/pgbackrest.conf`,
+`/etc/systemd/system/logrotate.timer.d/pgbackrest-hourly.conf` and
+`/etc/systemd/system/logrotate.service.d/pgbackrest.conf`, then run
+`sudo systemctl daemon-reload` and `sudo systemctl restart logrotate.timer`.
+Keep log files and the shared OS state. **Do not disable the OS logrotate or
+tmpfiles timers**: they also maintain other applications. Removing the hourly
+drop-in restores the prior host schedule; make sure another policy covers any
+remaining pgBackRest files before removing its configuration.
 
 ## Validation
 
@@ -414,17 +479,18 @@ docker build --build-arg POSTGRES_VERSION="$(cat POSTGRES_VERSION)" \
 ./tests/smoke-image.sh postgres-backrest:logging-test
 ```
 
-Host tests use sparse temporary logs, actual logrotate/gzip, an open append
-writer, old timestamps, missing/empty files, file ownership/modes, and an offline
-systemd installation that actually enables the staged timer. They never enable
-host services. Both default and custom installs undergo `systemd-analyze verify`;
-tests assert equality of rotation, expiry and sandbox paths and reject ambiguous
-paths. Simulated low-space tests verify that preflight is read-only, aged rotations
-still expire, and live files remain intact. Image tests use only disposable
-containers, tmpfs data/repositories and temporary logs; they verify default and explicit debug levels, fallback and
-mounted templates, native effective settings through `docker exec`, a real full
-backup, asynchronous archiving, and log/config persistence across recreation.
-Repository checks derive the archive ID from the backup's database metadata.
-CI runs both suites. Host timer execution, permissions under the deployment's
-user mapping/SELinux policy, production template overrides, and archive health
-remain required operator checks after deployment.
+Host tests invoke real OS logrotate and tmpfiles on temporary logs. They verify
+threshold/daily rotation, compression, inactive-log expiry, append-descriptor
+continuity, ownership/permissions, custom-directory consistency, installation
+preflight, and offline integration with distribution-owned timers. They do not
+start or alter host services. Staged OS units and their drop-ins pass
+`systemd-analyze verify`.
+
+Image tests use disposable containers, tmpfs data/repositories, temporary log
+mounts and Docker's actual `local` logger. They verify console receipt from archive
+commands and scheduled backup/expire jobs, command failure propagation, absence
+of duplicate backup files, retained async file logging, default/explicit debug,
+a real full backup and repository WAL receipt, and recreation persistence.
+Archive IDs come from backup database metadata. CI runs both suites. Production
+mount permissions, existing scheduler policies, logger settings and archive health
+remain operator checks; nothing deploys automatically to the database host.

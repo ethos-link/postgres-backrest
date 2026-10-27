@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Detached archivers close their standard descriptors: keep their file logging.
+for argument in "$@"; do
+  case "$argument" in
+    archive-push|archive-get)
+      echo "Use pgbackrest directly for archiving so async file logs remain enabled." >&2
+      exit 2
+      ;;
+  esac
+done
+
+# Scheduled docker exec commands otherwise log only to the exec client. Avoid
+# duplicating their console output in files; a CLI debug override still works.
+export PGBACKREST_LOG_LEVEL_CONSOLE="${PGBACKREST_LOG_LEVEL_CONSOLE:-info}"
+export PGBACKREST_LOG_LEVEL_FILE=off
+exec pgbackrest "$@" >/proc/1/fd/1 2>/proc/1/fd/2

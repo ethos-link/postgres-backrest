@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install host test dependencies
         run: sudo apt-get update && sudo apt-get install -y logrotate gettext-base
-      - name: Test rotation and timer installation
+      - name: Test native OS rotation, expiry and timer integration
         run: python3 tests/test_log_rotation.py
       - name: Build image without publishing
         run: docker build --build-arg POSTGRES_VERSION="$(cat POSTGRES_VERSION)" -t postgres-backrest:logging-test .
