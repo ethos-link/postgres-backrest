@@ -2,26 +2,33 @@
 
 # Postgres + PgBackRest
 
-[![Maintained by Ethos Link](https://img.shields.io/badge/maintained%20by-Ethos%20Link-3b82f6)](https://ethos-link.com)
+[![Maintained by EthosLink](https://img.shields.io/badge/maintained%20by-EthosLink-3b82f6)](https://www.ethos-link.com)
 [![Docker Pulls](https://img.shields.io/docker/pulls/ethoslink/postgres-backrest)](https://hub.docker.com/r/ethoslink/postgres-backrest)
 
 A production-ready PostgreSQL image with PgBackRest preinstalled and sensible default configuration.
 
-This image is maintained by **[Ethos Link](https://ethos-link.com)**. It is a small, reusable extract from operational work we do for **[Reviato](https://www.reviato.com)**.
-
-**Capture. Interpret. Act.**
-
-Turn guest feedback into clear next steps for your team. Collect private appraisals, spot patterns across reviews, and act before small issues turn into public ones.
+Maintained by **[EthosLink](https://www.ethos-link.com)**, the company behind Reviato, Nuntio, and Profix. This image comes from our database operations work for **[Reviato](https://www.reviato.com)**.
 
 The goal is simple: make it easy to run Postgres with backups and predictable configuration without turning your repo into an ops research project.
 
-## About
+## More from EthosLink
 
-We believe in open source and sharing operational knowledge.
-If you like this project, see:
+We build business products and share the engineering tools behind our work.
 
-- **[git-markdown](https://github.com/ethos-link/git-markdown)**: A tool to convert git repos into LLM-friendly markdown.
-- **[Reviato](https://www.reviato.com)**: Guest feedback workflows for hospitality operators.
+### Products
+
+- **[Reviato](https://www.reviato.com)** — Understand what customers are telling you. Collect private feedback, explore recurring themes in public reviews, and keep the original words and follow-up details close at hand.
+- **[Nuntio](https://www.nuntiohq.com)** — Prepare social posts ahead of time. Keep drafts, channel-specific versions, team review, scheduling, and publishing outcomes in one workspace.
+- **[Profix](https://www.ethos-link.com/products/profix)** — See what sold, what it earned, and what is still on the shelf. Profit and stock analysis for clothing shops and boutiques. **Early access.**
+
+### Open source
+
+- **[postgres-backrest](https://github.com/ethos-link/postgres-backrest)** — This PostgreSQL image: PgBackRest preinstalled, WAL archiving defaults, and configuration you can mount and manage yourself.
+- **[git-markdown](https://github.com/ethos-link/git-markdown)** — Export a GitHub pull request, reviews, and discussion into one Markdown file for offline review, AI workflows, or engineering handoffs.
+- **[indexmap](https://github.com/ethos-link/indexmap)** — Build and validate XML sitemaps from explicit Ruby definitions, with Rails tasks and safe publishing that keeps the last good files if generation fails.
+- **[Crawlscope](https://github.com/ethos-link/crawlscope)** — Crawl your sitemap to check indexability, metadata, structured data, and internal links. Use structured findings in scripts, a CLI, or Rails tasks.
+
+See the [product and project guide](docs/ethoslink.md) for more detail and useful next steps, or browse [all products](https://www.ethos-link.com/products) and [open-source project notes](https://www.ethos-link.com/opensource).
 
 ---
 
