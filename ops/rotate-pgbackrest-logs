@@ -1,13 +1,38 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+check_space() {
+  local directory="$1" sizes bytes total=0 largest=0 available required
+  sizes="$(find "$directory" -maxdepth 1 -type f -name '*.log' -printf '%s\n')"
+  while IFS= read -r bytes; do
+    [ -n "$bytes" ] || continue
+    total=$((total + bytes))
+    if ((bytes > largest)); then largest="$bytes"; fi
+  done <<< "$sizes"
+  # Budget copies of all live logs plus one worst-case gzip and a 64 MiB margin.
+  # This is conservative: some logs might not be due for rotation this hour.
+  available="$(df -B1 --output=avail "$directory" | tail -n 1)"
+  required=$((total + largest + 64 * 1024 * 1024))
+  if ((total > 0 && available < required)); then
+    echo "Insufficient rotation space in $directory: need $required bytes, have $available. Preserve diagnostics and reclaim space before retrying; no live logs were truncated." >&2
+    return 1
+  fi
+}
+
+if [ "$#" -eq 2 ] && [ "$1" = --check-space ]; then
+  check_space "$2"
+  exit 0
+fi
+
 if [ "$#" -ne 3 ]; then
-  echo "Usage: $0 CONFIG STATE LOG_DIRECTORY" >&2
+  echo "Usage: $0 CONFIG STATE LOG_DIRECTORY | --check-space LOG_DIRECTORY" >&2
   exit 2
 fi
 
-logrotate --state "$2" "$1"
 # logrotate's maxage only runs when a live log rotates. Expire rotated files
 # from inactive commands too. Never follow symlinks or touch live *.log files.
+# Expire first so low free space cannot prevent aged rotations being removed.
 find "$3" -regextype posix-extended -maxdepth 1 -type f \
   -regex '.*/[^/]+\.log-[0-9]{14}(\.gz)?' -mmin +20160 -delete
+check_space "$3"
+logrotate --state "$2" "$1"

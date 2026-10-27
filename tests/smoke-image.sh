@@ -86,13 +86,18 @@ PY
        ! grep -qE "[[:space:]]DEBUG:" /var/log/pgbackrest/*.log'
     # A backup history filename can be last_archived_wal; check the known closed
     # data segment recorded by backup metadata instead.
-    wal="$(python3 - "$temporary/info.json" <<'PY'
+    archive_metadata="$(python3 - "$temporary/info.json" <<'PY'
 import json, sys
-print(json.load(open(sys.argv[1]))[0]['backup'][-1]['archive']['stop'])
+stanza = json.load(open(sys.argv[1]))[0]
+backup = stanza['backup'][-1]
+archive = next(item for item in stanza['archive']
+               if item['database'] == backup['database'])
+print(backup['archive']['stop'], archive['id'])
 PY
 )"
+    read -r wal archive_id <<< "$archive_metadata"
     output="$(docker exec "$name" pgbackrest --stanza=main --repo=1 repo-ls \
-      --filter="^$wal-" "archive/main/18-1/${wal:0:16}")"
+      --filter="^$wal-" "archive/main/$archive_id/${wal:0:16}")"
     [[ "$output" == *"$wal-"* ]]
     docker exec "$name" psql -U postgres -v ON_ERROR_STOP=1 -c \
       'SELECT archived_count, failed_count, last_archived_wal FROM pg_stat_archiver;'
